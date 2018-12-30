@@ -13,7 +13,8 @@ func Example() {
 		MaxPending: 100,
 		// The maximum number of concurrent acquires
 		MaxOutstanding: 10,
-		// The target latency to wait for an acquire. Acquires that take longer than this can fail.
+		// The target latency to wait for an acquire.
+		// Acquires that take longer than this can fail.
 		TargetLatency: 5 * time.Millisecond,
 	})
 
