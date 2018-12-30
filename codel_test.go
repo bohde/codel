@@ -9,9 +9,9 @@ import (
 
 func ExampleLock() {
 	c := New(Options{
-		MaxPending:     100,
-		MaxOutstanding: 10,
-		TargetLatency:  5 * time.Millisecond,
+		MaxPending:     100,                  // The maximum number of pending acquires
+		MaxOutstanding: 10,                   // The maximum number of concurrent acquires
+		TargetLatency:  5 * time.Millisecond, // The target latency to wait for an acquire. Acquires that take longer than this can fail.
 	})
 	// This needs to be called in order to release resources.
 	defer c.Close()

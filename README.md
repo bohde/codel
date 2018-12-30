@@ -3,11 +3,13 @@
 [![Build Status](https://travis-ci.org/joshbohde/codel.svg?branch=master)](https://travis-ci.org/joshbohde/codel)
 [![GoDoc](https://godoc.org/github.com/joshbohde/codel?status.svg)](https://godoc.org/github.com/joshbohde/codel)
 
-`codel` implements the [Controlled Delay](https://queue.acm.org/detail.cfm?id=2209336) algorithm as a lock. It implements overload detection based upon latency, while attempting to maximize throughput.
+`codel` implements the [Controlled Delay](https://queue.acm.org/detail.cfm?id=2209336) algorithm for overload detection, providing a mechanism to shed load when overloaded. It optimizes for throughput, even when downstream rates dynamically change, while keeping delays low when not overloaded.
 
 ## Installation
 
-`$ go get github.com/joshbohde/codel`
+```
+$ go get github.com/joshbohde/codel
+```
 
 ## Example
 
@@ -19,9 +21,9 @@ import (
 
 func Example() {
 	c := codel.New(codel.Options{
-		MaxPending:     100,
-		MaxOutstanding: 10,
-		TargetLatency:  5 * time.Millisecond,
+		MaxPending:     100,                  // The maximum number of pending acquires
+		MaxOutstanding: 10,                   // The maximum number of concurrent acquires
+		TargetLatency:  5 * time.Millisecond, // The target latency to wait for an acquire. Acquires that take longer than this can fail.
 	})
 	// This needs to be called in order to release resources.
 	defer c.Close()
@@ -42,7 +44,7 @@ func Example() {
 
 ## Benchmarks
 
-The `Lock` does serialize access, introducing latency. If not overloaded, it generally presents <1us overhead.
+The `Lock` serializes access, introducing latency overhead. When not overloaded, this overhead should be under 1us.
 
 ```
 BenchmarkLock-4                  2000000               740 ns/op              96 B/op          1 allocs/op

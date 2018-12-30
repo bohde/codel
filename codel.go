@@ -13,14 +13,14 @@ const (
 	interval = 100 * time.Millisecond
 )
 
-// rendevouz is for returning context to the calling goroutine
-type rendevouz struct {
+// rendezvouz is for returning context to the calling goroutine
+type rendezvouz struct {
 	enqueuedTime time.Time
 	errChan      chan error
 	ctx          context.Context
 }
 
-func (r rendevouz) Drop() {
+func (r rendezvouz) Drop() {
 	r.errChan <- Dropped
 	close(r.errChan)
 }
@@ -29,7 +29,7 @@ func (r rendevouz) Drop() {
 type Options struct {
 	MaxPending     int           // The maximum number of pending acquires
 	MaxOutstanding int           // The maximum number of concurrent acquires
-	TargetLatency  time.Duration // The target latency. Acquires can fail once the minimum in a variable windows exceeds this.
+	TargetLatency  time.Duration // The target latency to wait for an acquire. Acquires that take longer than this can fail.
 }
 
 // Lock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
@@ -39,7 +39,7 @@ type Lock struct {
 	dropNext       time.Time
 	count          uint
 	dropping       bool
-	incoming       chan rendevouz
+	incoming       chan rendezvouz
 	outstanding    chan struct{}
 	done           chan struct{}
 }
@@ -51,7 +51,7 @@ func New(opts Options) *Lock {
 		dropNext:       time.Time{},
 		count:          0,
 		dropping:       false,
-		incoming:       make(chan rendevouz, opts.MaxPending),
+		incoming:       make(chan rendezvouz, opts.MaxPending),
 		outstanding:    make(chan struct{}, opts.MaxOutstanding),
 		done:           make(chan struct{}),
 	}
@@ -76,7 +76,7 @@ func New(opts Options) *Lock {
 
 // Acquire a Lock with FIFO ordering, respecting the context. Returns an error it fails to acquire.
 func (l *Lock) Acquire(ctx context.Context) error {
-	r := rendevouz{
+	r := rendezvouz{
 		enqueuedTime: time.Now(),
 		errChan:      make(chan error),
 		ctx:          ctx,
@@ -113,7 +113,7 @@ func (l *Lock) controlLaw(t time.Time) time.Time {
 }
 
 // Pull a single instance off the queue
-func (l *Lock) doDeque(now time.Time) (r rendevouz, ok bool, okToDrop bool) {
+func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
 	r, ok = <-l.incoming
 	sojurnDuration := now.Sub(r.enqueuedTime)
 
@@ -130,10 +130,10 @@ func (l *Lock) doDeque(now time.Time) (r rendevouz, ok bool, okToDrop bool) {
 }
 
 // Pull instances off the queue until we no longer drop
-func (l *Lock) deque() (rendevouz rendevouz, ok bool) {
+func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 	now := time.Now()
 
-	rendevouz, ok, okToDrop := l.doDeque(now)
+	rendezvouz, ok, okToDrop := l.doDeque(now)
 
 	// The queue has no more entries, so return
 	if !ok {
@@ -148,8 +148,8 @@ func (l *Lock) deque() (rendevouz rendevouz, ok bool) {
 	if l.dropping {
 		for now.After(l.dropNext) && l.dropping {
 			l.count++
-			rendevouz.Drop()
-			rendevouz, ok, okToDrop = l.doDeque(now)
+			rendezvouz.Drop()
+			rendezvouz, ok, okToDrop = l.doDeque(now)
 
 			if !ok {
 				return
@@ -162,8 +162,8 @@ func (l *Lock) deque() (rendevouz rendevouz, ok bool) {
 			}
 		}
 	} else if okToDrop && now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval {
-		rendevouz.Drop()
-		rendevouz, ok, _ = l.doDeque(now)
+		rendezvouz.Drop()
+		rendezvouz, ok, _ = l.doDeque(now)
 
 		if !ok {
 			return
@@ -183,7 +183,7 @@ func (l *Lock) deque() (rendevouz rendevouz, ok bool) {
 	return
 }
 
-// Signal a signle rendevouz
+// Signal a single rendezvouz
 func (l *Lock) step() (ok bool) {
 	// grab a lock
 	<-l.outstanding
