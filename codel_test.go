@@ -9,10 +9,14 @@ import (
 
 func Example() {
 	c := New(Options{
-		MaxPending:     100,                  // The maximum number of pending acquires
-		MaxOutstanding: 10,                   // The maximum number of concurrent acquires
-		TargetLatency:  5 * time.Millisecond, // The target latency to wait for an acquire. Acquires that take longer than this can fail.
+		// The maximum number of pending acquires
+		MaxPending: 100,
+		// The maximum number of concurrent acquires
+		MaxOutstanding: 10,
+		// The target latency to wait for an acquire. Acquires that take longer than this can fail.
+		TargetLatency: 5 * time.Millisecond,
 	})
+
 	// This needs to be called in order to release resources.
 	defer c.Close()
 
