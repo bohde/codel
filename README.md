@@ -1,10 +1,13 @@
 # codel
 
+[![Build Status](https://travis-ci.org/joshbohde/codel.svg?branch=master)](https://travis-ci.org/joshbohde/codel)
+[![GoDoc](https://godoc.org/github.com/joshbohde/codel?status.svg)](https://godoc.org/github.com/joshbohde/codel)
+
 `codel` implements the [Controlled Delay](https://queue.acm.org/detail.cfm?id=2209336) algorithm as a lock. It implements overload detection based upon latency, while attempting to maximize throughput.
 
 ## Installation
 
-`go get github.com/joshbohde/codel`
+`$ go get github.com/joshbohde/codel`
 
 ## Example
 
