@@ -9,9 +9,9 @@ import (
 
 func ExampleLock() {
 	c := New(Options{
-		maxPending:     100,
-		maxOutstanding: 10,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     100,
+		MaxOutstanding: 10,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	// This needs to be called in order to release resources.
 	defer c.Close()
@@ -27,9 +27,9 @@ func ExampleLock() {
 
 func TestLock(t *testing.T) {
 	c := New(Options{
-		maxPending:     1,
-		maxOutstanding: 1,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     1,
+		MaxOutstanding: 1,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	defer c.Close()
 
@@ -43,9 +43,9 @@ func TestLock(t *testing.T) {
 
 func TestAcquireFailsForCanceledContext(t *testing.T) {
 	c := New(Options{
-		maxPending:     1,
-		maxOutstanding: 1,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     1,
+		MaxOutstanding: 1,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	defer c.Close()
 
@@ -64,9 +64,9 @@ func TestLockCanHaveMultiple(t *testing.T) {
 	const concurrent = 4
 
 	c := New(Options{
-		maxPending:     1,
-		maxOutstanding: concurrent,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     1,
+		MaxOutstanding: concurrent,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	defer c.Close()
 
@@ -87,9 +87,9 @@ func TestLockCanHaveMultiple(t *testing.T) {
 
 func BenchmarkLock(b *testing.B) {
 	c := New(Options{
-		maxPending:     1,
-		maxOutstanding: 1,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     1,
+		MaxOutstanding: 1,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	defer c.Close()
 
@@ -110,9 +110,9 @@ func BenchmarkLock(b *testing.B) {
 
 func BenchmarkLockOverloaded(b *testing.B) {
 	c := New(Options{
-		maxPending:     b.N,
-		maxOutstanding: 10,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     b.N,
+		MaxOutstanding: 10,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	defer c.Close()
 

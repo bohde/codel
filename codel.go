@@ -27,9 +27,9 @@ func (r rendevouz) Drop() {
 
 // Options are options to configure a Lock.
 type Options struct {
-	maxPending     int           // The maximum number of pending acquires
-	maxOutstanding int           // The maximum number of concurrent acquires
-	targetLatency  time.Duration // The target latency. Acquires can fail once the minimum in a variable windows exceeds this.
+	MaxPending     int           // The maximum number of pending acquires
+	MaxOutstanding int           // The maximum number of concurrent acquires
+	TargetLatency  time.Duration // The target latency. Acquires can fail once the minimum in a variable windows exceeds this.
 }
 
 // Lock implements a FIFO lock with concurrency control, based upon the [CoDel](https://queue.acm.org/detail.cfm?id=2209336) algorithm.
@@ -46,17 +46,17 @@ type Lock struct {
 
 func New(opts Options) *Lock {
 	q := Lock{
-		target:         opts.targetLatency,
+		target:         opts.TargetLatency,
 		firstAboveTime: time.Time{},
 		dropNext:       time.Time{},
 		count:          0,
 		dropping:       false,
-		incoming:       make(chan rendevouz, opts.maxPending),
-		outstanding:    make(chan struct{}, opts.maxOutstanding),
+		incoming:       make(chan rendevouz, opts.MaxPending),
+		outstanding:    make(chan struct{}, opts.MaxOutstanding),
 		done:           make(chan struct{}),
 	}
 
-	for i := 0; i < opts.maxOutstanding; i++ {
+	for i := 0; i < opts.MaxOutstanding; i++ {
 		q.outstanding <- struct{}{}
 	}
 

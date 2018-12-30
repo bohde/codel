@@ -16,9 +16,9 @@ import (
 
 func Example() {
 	c := codel.New(codel.Options{
-		maxPending:     100,
-		maxOutstanding: 10,
-		targetLatency:  5 * time.Millisecond,
+		MaxPending:     100,
+		MaxOutstanding: 10,
+		TargetLatency:  5 * time.Millisecond,
 	})
 	// This needs to be called in order to release resources.
 	defer c.Close()
