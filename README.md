@@ -23,15 +23,15 @@ func Example() {
 	// This needs to be called in order to release resources.
 	defer c.Close()
 
-    // Attempt to acquire the lock.
+	// Attempt to acquire the lock.
 	err := c.Acquire(context.Background())
 
-    // if err is not nil, acquisition failed.
+	// if err is not nil, acquisition failed.
 	if err != nil {
 		return
 	}
 
-    // If acquisition succeeded, we need to release it.
+	// If acquisition succeeded, we need to release it.
 	defer c.Release()
 }
 
