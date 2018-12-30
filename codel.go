@@ -8,6 +8,7 @@ package codel
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 )
 
@@ -26,7 +27,10 @@ type rendezvouz struct {
 }
 
 func (r rendezvouz) Drop() {
-	r.errChan <- Dropped
+	select {
+	case r.errChan <- Dropped:
+	case <-r.ctx.Done():
+	}
 	close(r.errChan)
 }
 
@@ -114,7 +118,7 @@ func (l *Lock) Close() {
 
 // Adjust the time based upon interval / sqrt(count)
 func (l *Lock) controlLaw(t time.Time) time.Time {
-	return t.Add(interval / time.Duration(sqrt(l.count)))
+	return t.Add(time.Duration(float64(interval) / math.Sqrt(float64(l.count))))
 }
 
 // Pull a single instance off the queue
@@ -166,7 +170,7 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 				l.dropNext = l.controlLaw(l.dropNext)
 			}
 		}
-	} else if okToDrop && now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval {
+	} else if okToDrop && (now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval) {
 		rendezvouz.Drop()
 		rendezvouz, ok, _ = l.doDeque(now)
 
