@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func ExampleLock() {
+func Example() {
 	c := New(Options{
 		MaxPending:     100,                  // The maximum number of pending acquires
 		MaxOutstanding: 10,                   // The maximum number of concurrent acquires
