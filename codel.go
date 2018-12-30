@@ -32,7 +32,7 @@ type Options struct {
 	TargetLatency  time.Duration // The target latency. Acquires can fail once the minimum in a variable windows exceeds this.
 }
 
-// Lock implements a FIFO lock with concurrency control, based upon the [CoDel](https://queue.acm.org/detail.cfm?id=2209336) algorithm.
+// Lock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
 type Lock struct {
 	target         time.Duration
 	firstAboveTime time.Time
