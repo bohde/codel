@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -42,6 +43,7 @@ type Options struct {
 
 // Lock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
 type Lock struct {
+	updateLock     sync.Mutex
 	target         time.Duration
 	firstAboveTime time.Time
 	dropNext       time.Time
@@ -93,6 +95,7 @@ func (l *Lock) Acquire(ctx context.Context) error {
 	select {
 	case l.incoming <- r:
 	case <-ctx.Done():
+		l.externalDrop()
 		return ctx.Err()
 	}
 
@@ -145,6 +148,21 @@ func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
 
 }
 
+// Signal that we couldn't write to the queue
+func (l *Lock) externalDrop() {
+	l.updateLock.Lock()
+	defer l.updateLock.Unlock()
+	l.dropping = true
+	l.count++
+	l.dropNext = l.controlLaw(l.dropNext)
+}
+
+func (l *Lock) isDropping() bool {
+	l.updateLock.Lock()
+	defer l.updateLock.Unlock()
+	return l.dropping
+}
+
 // Pull instances off the queue until we no longer drop
 func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 	now := time.Now()
@@ -157,13 +175,16 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 	}
 
 	if !okToDrop {
+		l.updateLock.Lock()
+		defer l.updateLock.Unlock()
 		l.dropping = false
 		return
 	}
 
-	if l.dropping {
-		for now.After(l.dropNext) && l.dropping {
-			l.count++
+	if l.isDropping() {
+		isDropping := true
+
+		for now.After(l.dropNext) && isDropping {
 			rendezvouz.Drop()
 			rendezvouz, ok, okToDrop = l.doDeque(now)
 
@@ -171,19 +192,29 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 				return
 			}
 
+			isDropping = okToDrop
+
+			l.updateLock.Lock()
+
+			l.count++
 			if !okToDrop {
 				l.dropping = false
 			} else {
 				l.dropNext = l.controlLaw(l.dropNext)
 			}
+
+			l.updateLock.Unlock()
+
 		}
-	} else if okToDrop && (now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval) {
+	} else if now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval {
 		rendezvouz.Drop()
 		rendezvouz, ok, _ = l.doDeque(now)
 
 		if !ok {
 			return
 		}
+
+		l.updateLock.Lock()
 
 		l.dropping = true
 
@@ -194,6 +225,8 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 		}
 
 		l.dropNext = l.controlLaw(now)
+
+		l.updateLock.Unlock()
 	}
 
 	return
@@ -213,6 +246,7 @@ func (l *Lock) step() (ok bool) {
 			// from here the acquirer needs to release
 			return ok
 		case <-r.ctx.Done():
+			l.externalDrop()
 			// otherwise, the acquirer is canceled
 		}
 	}
