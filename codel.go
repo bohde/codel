@@ -17,7 +17,7 @@ import (
 var Dropped = errors.New("dropped")
 
 const (
-	interval = 100 * time.Millisecond
+	interval = 10 * time.Millisecond
 )
 
 // rendezvouz is for returning context to the calling goroutine
