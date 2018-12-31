@@ -124,6 +124,10 @@ func (l *Lock) controlLaw(t time.Time) time.Time {
 // Pull a single instance off the queue
 func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
 	r, ok = <-l.incoming
+	if !ok {
+		return
+	}
+
 	sojurnDuration := now.Sub(r.enqueuedTime)
 
 	if sojurnDuration < l.target {
