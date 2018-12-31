@@ -192,5 +192,5 @@ func BenchmarkLockThroughput(b *testing.B) {
 	b.Run("input=1000 output=500", throughputTemplate(1000, 500, 1*time.Second))
 	b.Run("input=1000 output=250", throughputTemplate(1000, 250, 1*time.Second))
 	b.Run("input=1000 output=100", throughputTemplate(1000, 100, 1*time.Second))
-	b.Run("input=1000 output=100 timeout=100ms", throughputTemplate(1000, 100, 1*time.Millisecond))
+	b.Run("input=1000 output=100 timeout=100ms", throughputTemplate(1000, 100, 100*time.Millisecond))
 }
