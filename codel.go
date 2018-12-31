@@ -31,7 +31,6 @@ func (r rendezvouz) Drop() {
 	case r.errChan <- Dropped:
 	case <-r.ctx.Done():
 	}
-	close(r.errChan)
 }
 
 // Options are options to configure a Lock.
@@ -107,7 +106,11 @@ func (l *Lock) Acquire(ctx context.Context) error {
 
 // Release a previously acquired lock.
 func (l *Lock) Release() {
-	l.outstanding <- struct{}{}
+	select {
+	case l.outstanding <- struct{}{}:
+	default:
+		panic("Blocked when releasing lock")
+	}
 }
 
 // Close the lock and wait for the background job to finish.
