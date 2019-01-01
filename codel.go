@@ -136,7 +136,7 @@ func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
 
 	sojurnDuration := now.Sub(r.enqueuedTime)
 
-	if sojurnDuration < l.target {
+	if sojurnDuration < l.target || len(l.incoming) == 0 {
 		l.firstAboveTime = time.Time{}
 	} else if (l.firstAboveTime == time.Time{}) {
 		l.firstAboveTime = now.Add(interval)
