@@ -53,7 +53,7 @@ func Example() {
 	// If acquisition succeeded, we need to release it.
 	defer c.Release()
 
-    // Do some process with external resources
+	// Do some process with external resources
 }
 
 ```
