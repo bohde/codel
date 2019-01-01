@@ -13,65 +13,73 @@ import (
 	"github.com/joshbohde/codel/stats"
 )
 
-// Model input & output as random processes with average throughput.
-func HTTPServerSim(inputPerSec, outputPerSec int, timeToRun time.Duration) {
+func msToWait(perSec int) time.Duration {
+	ms := rand.ExpFloat64() / (float64(perSec) / 1000)
+	return time.Duration(ms * float64(time.Millisecond))
+}
+
+func emit(perSec int, timeToRun time.Duration, action func()) int64 {
 	start := time.Now()
 
-	msToWait := func(perSec int) time.Duration {
-		ms := rand.ExpFloat64() / (float64(perSec) / 1000)
-		return time.Duration(ms * float64(time.Millisecond))
-	}
-
-	lock := codel.New(codel.Options{
-		MaxPending:     1000,
-		MaxOutstanding: 10,
-		TargetLatency:  time.Millisecond,
-	})
-
 	wg := sync.WaitGroup{}
-	started := uint64(0)
-	dropped := uint64(0)
-
-	stat := stats.New()
-
-	mutex := sync.Mutex{}
+	started := int64(0)
 
 	for {
 		if time.Now().Sub(start) > timeToRun {
 			break
 		}
 
-		started++
+		time.Sleep(msToWait(perSec))
 
-		time.Sleep(msToWait(inputPerSec))
+		started++
 		wg.Add(1)
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-
-			timer := stat.Time()
-
-			err := lock.Acquire(ctx)
-			cancel()
-
-			if err != nil {
-				atomic.AddUint64(&dropped, 1)
-			} else {
-				// Simulate a single threaded server
-				mutex.Lock()
-				time.Sleep(msToWait(outputPerSec))
-				mutex.Unlock()
-
-				lock.Release()
-				timer.Mark()
-			}
+			action()
 			wg.Done()
 		}()
+
 	}
+	return started
+}
 
-	wg.Wait()
+type fakeServer struct {
+	mu     sync.Mutex
+	perSec int
+}
 
-	log.Printf("duration=%s input=%d output=%d dropped=%.4f p50=%s p95=%s p99=%s ", timeToRun,
+// Simulate a single threaded server
+func (s *fakeServer) Process() {
+	s.mu.Lock()
+	time.Sleep(msToWait(s.perSec))
+	s.mu.Unlock()
+}
+
+// Model input & output as random processes with average throughput.
+func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToRun time.Duration) {
+	stat := stats.New()
+	server := fakeServer{perSec: outputPerSec}
+
+	dropped := uint64(0)
+
+	started := emit(inputPerSec, timeToRun, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+
+		timer := stat.Time()
+
+		err := lock.Acquire(ctx)
+		cancel()
+
+		if err != nil {
+			atomic.AddUint64(&dropped, 1)
+		} else {
+			server.Process()
+			lock.Release()
+			timer.Mark()
+		}
+	})
+
+	log.Printf("method=%s duration=%s input=%d output=%d dropped=%.4f p50=%s p95=%s p99=%s ", method, timeToRun,
 		inputPerSec, outputPerSec,
 		float64(dropped)/float64(started), stat.Query(0.5), stat.Query(0.95), stat.Query(0.99))
 }
@@ -82,10 +90,20 @@ func main() {
 
 	wg := sync.WaitGroup{}
 
+	opts := codel.Options{
+		MaxPending:     1000,
+		MaxOutstanding: 10,
+		TargetLatency:  time.Millisecond,
+	}
+
 	run := func(in, out int) {
-		wg.Add(1)
+		wg.Add(2)
 		go func() {
-			HTTPServerSim(in, out, *runtime)
+			Simulate("codel", codel.New(opts), in, out, *runtime)
+			wg.Done()
+		}()
+		go func() {
+			Simulate("queue", NewSemaphore(opts), in, out, *runtime)
 			wg.Done()
 		}()
 	}

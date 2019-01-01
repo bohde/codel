@@ -9,10 +9,10 @@
 
 In a simulation of 1000 reqs/sec incoming, 500 reqs/sec outgoing for 10 seconds, here's the corresponding throughput and latency profile of both a queue and `codel`.
 
-| method | dropped | p50          | p95          | p99         |
-|--------|---------|--------------|--------------|-------------|
-| queue  | 0.4334  | 998.334747ms | 1.000009602s | 1.00012372s |
-| codel  | 0.4643  | 5.289966ms   | 16.897152ms  | 34.260408ms |
+| method | dropped | p50          | p95          | p99          |
+|--------|---------|--------------|--------------|--------------|
+| queue  | 0.4351  | 950.289343ms | 1.022490611s | 1.044003319s |
+| codel  | 0.4774  | 27.263768ms  | 43.828354ms  | 49.420307ms  |
 
 
 ## Installation
