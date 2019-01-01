@@ -51,6 +51,24 @@ func TestLock(t *testing.T) {
 	c.Release()
 }
 
+func TestAcquireFailsForCanceledContext(t *testing.T) {
+	c := New(Options{
+		MaxPending:     1,
+		MaxOutstanding: 0,
+		TargetLatency:  5 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := c.Acquire(ctx)
+	if err == nil {
+		t.Error("Expected an error:", err)
+		c.Release()
+	}
+
+}
+
 func TestLockCanHaveMultiple(t *testing.T) {
 	const concurrent = 4
 
