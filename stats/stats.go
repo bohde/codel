@@ -1,58 +1,50 @@
 package stats
 
 import (
+	"sync"
 	"time"
 
 	"github.com/bmizerany/perks/quantile"
 )
 
 type Stats struct {
-	stream  *quantile.Stream
-	samples chan float64
-	done    chan struct{}
+	stream *quantile.Stream
+	lock   *sync.Mutex
 }
 
 type Timer struct {
-	start   time.Time
-	samples chan float64
+	start time.Time
+	stats Stats
 }
 
 func (t Timer) Mark() {
 	elapsed := time.Since(t.start)
-	t.samples <- float64(elapsed.Nanoseconds())
+	t.stats.Insert(float64(elapsed.Nanoseconds()))
 }
 
 func New() Stats {
-	samples := make(chan float64, 10)
 	stream := quantile.NewTargeted(0.5, 0.95, 0.99)
-	done := make(chan struct{})
-
-	go func() {
-		for s := range samples {
-			stream.Insert(s)
-		}
-		done <- struct{}{}
-	}()
+	lock := sync.Mutex{}
 
 	return Stats{
-		samples: samples,
-		stream:  stream,
-		done:    done,
+		stream: stream,
+		lock:   &lock,
 	}
+}
+
+func (s Stats) Insert(val float64) {
+	s.lock.Lock()
+	s.stream.Insert(val)
+	s.lock.Unlock()
 }
 
 func (s Stats) Time() Timer {
 	return Timer{
-		start:   time.Now(),
-		samples: s.samples,
+		start: time.Now(),
+		stats: s,
 	}
 }
 
 func (s Stats) Query(quantile float64) time.Duration {
 	return time.Duration(s.stream.Query(quantile))
-}
-
-func (s Stats) Close() {
-	close(s.samples)
-	<-s.done
 }

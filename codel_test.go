@@ -174,7 +174,6 @@ func throughputTemplate(inputPerSec, outputPerSec int, timeout time.Duration) fu
 		}
 
 		wg.Wait()
-		stat.Close()
 
 		b.StopTimer()
 		b.Logf("n=%d input=%d output=%d dropped=%.4f p50=%s p95=%s p99=%s ", b.N,
