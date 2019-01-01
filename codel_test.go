@@ -22,13 +22,18 @@ func Example() {
 		TargetLatency: 5 * time.Millisecond,
 	})
 
+	// Attempt to acquire the lock.
 	err := c.Acquire(context.Background())
+
+	// if err is not nil, acquisition failed.
 	if err != nil {
 		return
 	}
 
+	// If acquisition succeeded, we need to release it.
 	defer c.Release()
 
+	// Do some process with external resources
 }
 
 func TestLock(t *testing.T) {

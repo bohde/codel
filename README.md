@@ -39,8 +39,6 @@ func Example() {
 		// Acquires that take longer than this can fail.
 		TargetLatency: 5 * time.Millisecond,
 	})
-	// This needs to be called in order to release resources.
-	defer c.Close()
 
 	// Attempt to acquire the lock.
 	err := c.Acquire(context.Background())
