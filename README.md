@@ -64,5 +64,4 @@ The `Lock` serializes access, introducing latency overhead. When not overloaded,
 
 ```
 BenchmarkLock-4                  2000000               740 ns/op              96 B/op          1 allocs/op
-BenchmarkLockOverloaded-4        1000000              4256 ns/op             676 B/op          3 allocs/op
 ```
