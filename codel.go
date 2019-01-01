@@ -1,8 +1,13 @@
-// Package codel implements the Controlled Delay algorithm
-// (https://queue.acm.org/detail.cfm?id=2209336) for overload
-// detection, providing a mechanism to shed load when overloaded. It
-// optimizes for throughput, even when downstream rates dynamically
-// change, while keeping delays low when not overloaded.
+// Package codel implements the Controlled Delay
+// (https://queue.acm.org/detail.cfm?id=2209336) algorithm for
+// overload detection, providing a mechanism to shed load when
+// overloaded. It optimizes for latency while keeping throughput high,
+// even when downstream rates dynamically change.
+// It keeps latency low when even severely overloaded, by preemptively
+// shedding some load when wait latency is long. It is comparable to
+// using a queue to handle bursts of load, but improves upon this
+// technique by avoiding the latency required to handle all previous
+// entries in the queue.
 package codel
 
 import (
