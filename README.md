@@ -7,13 +7,15 @@
 
 `codel` keeps latency low when even severely overloaded, by preemptively shedding some load when wait latency is long. It is comparable to using a queue to handle bursts of load, but improves upon this technique by avoiding the latency required to handle all previous entries in the queue.
 
-In a simulation of 1000 reqs/sec incoming, 500 reqs/sec outgoing for 10 seconds, here's the corresponding throughput and latency profile of both a queue and `codel`.
+In a simulation of 1000 reqs/sec incoming, 500 reqs/sec outgoing averages for 10 seconds, here's the corresponding throughput and latency profile of both a queue and `codel`. Throughput is slightly higher than the average due to randomness in the simulation.
 
-| method | dropped | p50          | p95          | p99          |
-|--------|---------|--------------|--------------|--------------|
-| queue  | 0.4351  | 950.289343ms | 1.022490611s | 1.044003319s |
-| codel  | 0.4774  | 27.263768ms  | 43.828354ms  | 49.420307ms  |
+| method | throughput | p50          | p95          | p99          |
+|--------|------------|--------------|--------------|--------------|
+| queue  | 507.41     | 963.604953ms | 1.024595796s | 1.041455537s |
+| codel  | 513.17     | 27.718827ms  | 44.085795ms  | 62.756499ms  |
 
+
+Source code for the simulations are included in the [sim directory](cmd/sim).
 
 ## Installation
 

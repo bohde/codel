@@ -25,11 +25,11 @@ func emit(perSec int, timeToRun time.Duration, action func()) int64 {
 	started := int64(0)
 
 	for {
+		time.Sleep(msToWait(perSec))
+
 		if time.Now().Sub(start) > timeToRun {
 			break
 		}
-
-		time.Sleep(msToWait(perSec))
 
 		started++
 		wg.Add(1)
@@ -60,7 +60,7 @@ func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToR
 	stat := stats.New()
 	server := fakeServer{perSec: outputPerSec}
 
-	dropped := uint64(0)
+	completed := uint64(0)
 
 	started := emit(inputPerSec, timeToRun, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -70,18 +70,22 @@ func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToR
 		err := lock.Acquire(ctx)
 		cancel()
 
-		if err != nil {
-			atomic.AddUint64(&dropped, 1)
-		} else {
+		if err == nil {
 			server.Process()
 			lock.Release()
 			timer.Mark()
+			atomic.AddUint64(&completed, 1)
 		}
 	})
 
-	log.Printf("method=%s duration=%s input=%d output=%d dropped=%.4f p50=%s p95=%s p99=%s ", method, timeToRun,
-		inputPerSec, outputPerSec,
-		float64(dropped)/float64(started), stat.Query(0.5), stat.Query(0.95), stat.Query(0.99))
+	actualCompleted := atomic.LoadUint64(&completed)
+
+	successPercentage := float64(actualCompleted) / float64(started)
+
+	log.Printf("method=%s duration=%s input=%d output=%d throughput=%.2f completed=%.4f p50=%s p95=%s p99=%s ",
+		method, timeToRun,
+		inputPerSec, outputPerSec, float64(inputPerSec)*successPercentage, successPercentage,
+		stat.Query(0.5), stat.Query(0.95), stat.Query(0.99))
 }
 
 func main() {
