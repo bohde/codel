@@ -6,6 +6,7 @@
 package codel
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"math"
@@ -24,14 +25,17 @@ const (
 type rendezvouz struct {
 	enqueuedTime time.Time
 	errChan      chan error
-	ctx          context.Context
 }
 
 func (r rendezvouz) Drop() {
 	select {
 	case r.errChan <- Dropped:
-	case <-r.ctx.Done():
+	default:
 	}
+}
+
+func (r rendezvouz) Signal() {
+	close(r.errChan)
 }
 
 // Options are options to configure a Lock.
@@ -43,100 +47,115 @@ type Options struct {
 
 // Lock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
 type Lock struct {
-	updateLock     sync.Mutex
+	mu             sync.Mutex
 	target         time.Duration
 	firstAboveTime time.Time
 	dropNext       time.Time
-	count          uint
-	dropping       bool
-	incoming       chan rendezvouz
-	outstanding    chan struct{}
-	done           chan struct{}
+
+	droppedCount int64
+	dropping     bool
+
+	waiters    list.List
+	maxPending int64
+
+	outstanding    int64
+	maxOutstanding int64
 }
 
 func New(opts Options) *Lock {
 	q := Lock{
 		target:         opts.TargetLatency,
-		firstAboveTime: time.Time{},
-		dropNext:       time.Time{},
-		count:          0,
-		dropping:       false,
-		incoming:       make(chan rendezvouz, opts.MaxPending),
-		outstanding:    make(chan struct{}, opts.MaxOutstanding),
-		done:           make(chan struct{}),
+		maxOutstanding: int64(opts.MaxOutstanding),
+		maxPending:     int64(opts.MaxPending),
 	}
-
-	for i := 0; i < opts.MaxOutstanding; i++ {
-		q.outstanding <- struct{}{}
-	}
-
-	go func() {
-		ok := true
-		for ok {
-			ok = q.step()
-		}
-
-		q.drain()
-		q.done <- struct{}{}
-
-	}()
 
 	return &q
 }
 
 // Acquire a Lock with FIFO ordering, respecting the context. Returns an error it fails to acquire.
 func (l *Lock) Acquire(ctx context.Context) error {
+	l.mu.Lock()
+
+	// Fast path if we are unblocked.
+	if l.outstanding < l.maxOutstanding && l.waiters.Len() == 0 {
+		l.outstanding++
+		l.mu.Unlock()
+		return nil
+	}
+
+	// If our queue is full, drop
+	if int64(l.waiters.Len()) == l.maxPending {
+		l.externalDrop()
+		l.mu.Unlock()
+		return Dropped
+	}
+
 	r := rendezvouz{
 		enqueuedTime: time.Now(),
 		errChan:      make(chan error),
-		ctx:          ctx,
 	}
 
-	select {
-	case l.incoming <- r:
-	case <-ctx.Done():
-		l.externalDrop()
-		return ctx.Err()
-	}
+	elem := l.waiters.PushBack(r)
+	l.mu.Unlock()
 
 	select {
+
 	case err := <-r.errChan:
 		return err
+
 	case <-ctx.Done():
-		return ctx.Err()
+		err := ctx.Err()
+
+		l.mu.Lock()
+
+		select {
+		case err = <-r.errChan:
+		default:
+			l.waiters.Remove(elem)
+			l.externalDrop()
+		}
+
+		l.mu.Unlock()
+
+		return err
 	}
 }
 
 // Release a previously acquired lock.
 func (l *Lock) Release() {
-	select {
-	case l.outstanding <- struct{}{}:
-	default:
-		panic("Blocked when releasing lock")
+	l.mu.Lock()
+	l.outstanding--
+	if l.outstanding < 0 {
+		l.mu.Unlock()
+		panic("lock: bad release")
 	}
+
+	l.deque()
+
+	l.mu.Unlock()
+
 }
 
-// Close the lock and wait for the background job to finish.
-func (l *Lock) Close() {
-	close(l.incoming)
-	<-l.done
-}
-
-// Adjust the time based upon interval / sqrt(count)
+// Adjust the time based upon interval / sqrt(droppedCount)
 func (l *Lock) controlLaw(t time.Time) time.Time {
-	return t.Add(time.Duration(float64(interval) / math.Sqrt(float64(l.count))))
+	return t.Add(time.Duration(float64(interval) / math.Sqrt(float64(l.droppedCount))))
 }
 
-// Pull a single instance off the queue
+// Pull a single instance off the queue. This should be
 func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
-	r, ok = <-l.incoming
-	if !ok {
-		return
+	next := l.waiters.Front()
+
+	if next == nil {
+		return rendezvouz{}, false, false
 	}
+
+	l.waiters.Remove(next)
+
+	r = next.Value.(rendezvouz)
 
 	sojurnDuration := now.Sub(r.enqueuedTime)
 
-	if sojurnDuration < l.target || len(l.incoming) == 0 {
+	if sojurnDuration < l.target || l.waiters.Len() == 0 {
 		l.firstAboveTime = time.Time{}
 	} else if (l.firstAboveTime == time.Time{}) {
 		l.firstAboveTime = now.Add(interval)
@@ -144,47 +163,37 @@ func (l *Lock) doDeque(now time.Time) (r rendezvouz, ok bool, okToDrop bool) {
 		okToDrop = true
 	}
 
-	return
+	return r, true, okToDrop
 
 }
 
 // Signal that we couldn't write to the queue
 func (l *Lock) externalDrop() {
-	l.updateLock.Lock()
-	defer l.updateLock.Unlock()
 	l.dropping = true
-	l.count++
+	l.droppedCount++
 	l.dropNext = l.controlLaw(l.dropNext)
 }
 
-func (l *Lock) isDropping() bool {
-	l.updateLock.Lock()
-	defer l.updateLock.Unlock()
-	return l.dropping
-}
-
 // Pull instances off the queue until we no longer drop
-func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
+func (l *Lock) deque() {
 	now := time.Now()
 
 	rendezvouz, ok, okToDrop := l.doDeque(now)
 
-	// The queue has no more entries, so return
+	// The queue has no entries, so return
 	if !ok {
 		return
 	}
 
 	if !okToDrop {
-		l.updateLock.Lock()
-		defer l.updateLock.Unlock()
 		l.dropping = false
+		l.outstanding++
+		rendezvouz.Signal()
 		return
 	}
 
-	if l.isDropping() {
-		isDropping := true
-
-		for now.After(l.dropNext) && isDropping {
+	if l.dropping {
+		for now.After(l.dropNext) && l.dropping {
 			rendezvouz.Drop()
 			rendezvouz, ok, okToDrop = l.doDeque(now)
 
@@ -192,19 +201,13 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 				return
 			}
 
-			isDropping = okToDrop
+			l.droppedCount++
 
-			l.updateLock.Lock()
-
-			l.count++
 			if !okToDrop {
 				l.dropping = false
 			} else {
 				l.dropNext = l.controlLaw(l.dropNext)
 			}
-
-			l.updateLock.Unlock()
-
 		}
 	} else if now.Sub(l.dropNext) < interval || now.Sub(l.firstAboveTime) >= interval {
 		rendezvouz.Drop()
@@ -214,48 +217,17 @@ func (l *Lock) deque() (rendezvouz rendezvouz, ok bool) {
 			return
 		}
 
-		l.updateLock.Lock()
-
 		l.dropping = true
 
-		if l.count > 2 {
-			l.count -= 2
+		if l.droppedCount > 2 {
+			l.droppedCount -= 2
 		} else {
-			l.count = 1
+			l.droppedCount = 1
 		}
 
 		l.dropNext = l.controlLaw(now)
-
-		l.updateLock.Unlock()
 	}
 
-	return
-}
-
-// Signal a single rendezvouz
-func (l *Lock) step() (ok bool) {
-	// grab a lock
-	<-l.outstanding
-	for {
-		r, ok := l.deque()
-		if !ok {
-			return ok
-		}
-		select {
-		case r.errChan <- nil:
-			// from here the acquirer needs to release
-			return ok
-		case <-r.ctx.Done():
-			l.externalDrop()
-			// otherwise, the acquirer is canceled
-		}
-	}
-}
-
-// Drain the oustanding queue
-func (l *Lock) drain() {
-	// we need receive cap - 1, since we receive one for the closed incoming
-	for i := 0; i < cap(l.outstanding)-1; i++ {
-		<-l.outstanding
-	}
+	l.outstanding++
+	rendezvouz.Signal()
 }

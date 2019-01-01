@@ -63,5 +63,6 @@ func Example() {
 The `Lock` serializes access, introducing latency overhead. When not overloaded, this overhead should be under 1us.
 
 ```
-BenchmarkLock-4                  2000000               740 ns/op              96 B/op          1 allocs/op
+BenchmarkLockUnblocked-4        20000000                73.1 ns/op             0 B/op          0 allocs/op
+BenchmarkLockBlocked-4           2000000               665 ns/op             176 B/op          2 allocs/op
 ```

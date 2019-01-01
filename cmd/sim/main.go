@@ -14,7 +14,7 @@ import (
 )
 
 // Model input & output as random processes with average throughput.
-func HTTPServerSim(inputPerSec, outputPerSec int, timeout time.Duration, timeToRun time.Duration) {
+func HTTPServerSim(inputPerSec, outputPerSec int, timeToRun time.Duration) {
 	start := time.Now()
 
 	msToWait := func(perSec int) time.Duration {
@@ -27,7 +27,6 @@ func HTTPServerSim(inputPerSec, outputPerSec int, timeout time.Duration, timeToR
 		MaxOutstanding: 10,
 		TargetLatency:  time.Millisecond,
 	})
-	defer lock.Close()
 
 	wg := sync.WaitGroup{}
 	started := uint64(0)
@@ -48,7 +47,7 @@ func HTTPServerSim(inputPerSec, outputPerSec int, timeout time.Duration, timeToR
 		wg.Add(1)
 
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 
 			timer := stat.Time()
 
@@ -72,8 +71,8 @@ func HTTPServerSim(inputPerSec, outputPerSec int, timeout time.Duration, timeToR
 
 	wg.Wait()
 
-	log.Printf("duration=%s input=%d output=%d timeout=%s dropped=%.4f p50=%s p95=%s p99=%s ", timeToRun,
-		inputPerSec, outputPerSec, timeout,
+	log.Printf("duration=%s input=%d output=%d dropped=%.4f p50=%s p95=%s p99=%s ", timeToRun,
+		inputPerSec, outputPerSec,
 		float64(dropped)/float64(started), stat.Query(0.5), stat.Query(0.95), stat.Query(0.99))
 }
 
@@ -83,22 +82,21 @@ func main() {
 
 	wg := sync.WaitGroup{}
 
-	run := func(in, out int, timeout time.Duration) {
+	run := func(in, out int) {
 		wg.Add(1)
 		go func() {
-			HTTPServerSim(in, out, timeout, *runtime)
+			HTTPServerSim(in, out, *runtime)
 			wg.Done()
 		}()
 	}
 
-	run(1000, 2000, 1*time.Second)
-	run(1000, 1000, 1*time.Second)
-	run(1000, 900, 1*time.Second)
-	run(1000, 750, 1*time.Second)
-	run(1000, 500, 1*time.Second)
-	run(1000, 250, 1*time.Second)
-	run(1000, 100, 1*time.Second)
-	run(1000, 100, 100*time.Millisecond)
+	run(1000, 2000)
+	run(1000, 1000)
+	run(1000, 900)
+	run(1000, 750)
+	run(1000, 500)
+	run(1000, 250)
+	run(1000, 100)
 
 	wg.Wait()
 }

@@ -22,9 +22,6 @@ func Example() {
 		TargetLatency: 5 * time.Millisecond,
 	})
 
-	// This needs to be called in order to release resources.
-	defer c.Close()
-
 	err := c.Acquire(context.Background())
 	if err != nil {
 		return
@@ -40,7 +37,6 @@ func TestLock(t *testing.T) {
 		MaxOutstanding: 1,
 		TargetLatency:  5 * time.Millisecond,
 	})
-	defer c.Close()
 
 	err := c.Acquire(context.Background())
 	if err != nil {
@@ -48,25 +44,6 @@ func TestLock(t *testing.T) {
 	}
 
 	c.Release()
-}
-
-func TestAcquireFailsForCanceledContext(t *testing.T) {
-	c := New(Options{
-		MaxPending:     1,
-		MaxOutstanding: 1,
-		TargetLatency:  5 * time.Millisecond,
-	})
-	defer c.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := c.Acquire(ctx)
-	if err == nil {
-		t.Error("Expected an error:", err)
-		c.Release()
-	}
-
 }
 
 func TestLockCanHaveMultiple(t *testing.T) {
@@ -77,7 +54,6 @@ func TestLockCanHaveMultiple(t *testing.T) {
 		MaxOutstanding: concurrent,
 		TargetLatency:  5 * time.Millisecond,
 	})
-	defer c.Close()
 
 	ctx := context.Background()
 
@@ -94,13 +70,12 @@ func TestLockCanHaveMultiple(t *testing.T) {
 	}
 }
 
-func BenchmarkLock(b *testing.B) {
+func BenchmarkLockUnblocked(b *testing.B) {
 	c := New(Options{
 		MaxPending:     1,
 		MaxOutstanding: 1,
 		TargetLatency:  5 * time.Millisecond,
 	})
-	defer c.Close()
 
 	ctx := context.Background()
 	b.ResetTimer()
@@ -115,4 +90,41 @@ func BenchmarkLock(b *testing.B) {
 		c.Release()
 	}
 	b.StopTimer()
+}
+
+func BenchmarkLockBlocked(b *testing.B) {
+	const concurrent = 4
+
+	c := New(Options{
+		MaxPending:     1,
+		MaxOutstanding: concurrent,
+		TargetLatency:  5 * time.Millisecond,
+	})
+
+	ctx := context.Background()
+
+	// Acquire maximum outstanding to avoid fast path
+	for i := 0; i < concurrent; i++ {
+		err := c.Acquire(ctx)
+		if err != nil {
+			b.Error("Got an error:", err)
+			return
+		}
+	}
+
+	b.ResetTimer()
+
+	// Race the release and the acquire in order to benchmark slow path
+	for i := 0; i < b.N; i++ {
+		go func() {
+			c.Release()
+
+		}()
+		err := c.Acquire(ctx)
+
+		if err != nil {
+			b.Log("Got an error:", err)
+			return
+		}
+	}
 }
