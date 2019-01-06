@@ -46,5 +46,8 @@ func (s Stats) Time() Timer {
 }
 
 func (s Stats) Query(quantile float64) time.Duration {
-	return time.Duration(s.stream.Query(quantile))
+	s.lock.Lock()
+	val := s.stream.Query(quantile)
+	s.lock.Unlock()
+	return time.Duration(val)
 }
