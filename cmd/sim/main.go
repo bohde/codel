@@ -95,6 +95,7 @@ func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToR
 
 func main() {
 	runtime := flag.Duration("simulation-time", 5*time.Second, "Time to run each simulation")
+	targetLatency := flag.Duration("target-latency", 5*time.Millisecond, "Time to run each simulation")
 	flag.Parse()
 
 	wg := sync.WaitGroup{}
@@ -102,7 +103,7 @@ func main() {
 	opts := codel.Options{
 		MaxPending:     1000,
 		MaxOutstanding: 10,
-		TargetLatency:  time.Millisecond,
+		TargetLatency:  *targetLatency,
 	}
 
 	run := func(in, out int) {
