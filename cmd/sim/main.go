@@ -61,6 +61,7 @@ func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToR
 	server := fakeServer{perSec: outputPerSec}
 
 	completed := uint64(0)
+	rejected := uint64(0)
 
 	started := emit(inputPerSec, timeToRun, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -75,16 +76,20 @@ func Simulate(method string, lock Locker, inputPerSec, outputPerSec int, timeToR
 			lock.Release()
 			timer.Mark()
 			atomic.AddUint64(&completed, 1)
+		} else {
+			atomic.AddUint64(&rejected, 1)
 		}
 	})
 
 	actualCompleted := atomic.LoadUint64(&completed)
+	actualRejected := atomic.LoadUint64(&rejected)
 
 	successPercentage := float64(actualCompleted) / float64(started)
+	rejectedPercentage := float64(actualRejected) / float64(started)
 
-	log.Printf("method=%s duration=%s input=%d output=%d throughput=%.2f completed=%.4f p50=%s p95=%s p99=%s ",
+	log.Printf("method=%s duration=%s input=%d output=%d throughput=%.2f completed=%.4f rejected=%.4f p50=%s p95=%s p99=%s ",
 		method, timeToRun,
-		inputPerSec, outputPerSec, float64(inputPerSec)*successPercentage, successPercentage,
+		inputPerSec, outputPerSec, float64(inputPerSec)*successPercentage, successPercentage, rejectedPercentage,
 		stat.Query(0.5), stat.Query(0.95), stat.Query(0.99))
 }
 
