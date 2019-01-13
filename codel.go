@@ -169,9 +169,10 @@ func (l *Lock) Backoff() {
 
 	if l.nextOutstandingAdjust.Before(now) {
 		// scale down 0.7 times, rounding up, ensuring we scale down
-		before := l.outstandingLimit
+		before := l.outstanding
+
 		if before > 1 {
-			l.outstandingLimit = ((l.outstandingLimit * 7) + 9) / 10
+			l.outstandingLimit = ((before * 7) + 9) / 10
 			if l.outstandingLimit >= before {
 				l.outstandingLimit--
 			}
