@@ -66,16 +66,22 @@ type Lock struct {
 	waiters    list.List
 	maxPending int64
 
-	outstanding           int64
-	outstandingLimit      int64
-	maxOutstandingLimit   int64
-	nextOutstandingAdjust time.Time
+	outstanding             int64
+	outstandingLimit        int64
+	maxOutstandingLimit     int64
+	nextOutstandingIncrease time.Time
+	nextOutstandingDecrease time.Time
 }
 
 func New(opts Options) *Lock {
+	initial := opts.InitialOutstanding
+	if initial == 0 {
+		initial = opts.MaxOutstanding
+	}
+
 	q := Lock{
 		target:              opts.TargetLatency,
-		outstandingLimit:    int64(opts.InitialOutstanding),
+		outstandingLimit:    int64(initial),
 		maxOutstandingLimit: int64(opts.MaxOutstanding),
 		maxPending:          int64(opts.MaxPending),
 	}
