@@ -16,6 +16,7 @@ import (
 	"errors"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,7 +24,8 @@ import (
 var Dropped = errors.New("dropped")
 
 const (
-	interval = 10 * time.Millisecond
+	interval            = 10 * time.Millisecond
+	outstandingInterval = 1 * time.Second
 )
 
 // rendezvouz is for returning context to the calling goroutine
@@ -45,9 +47,10 @@ func (r rendezvouz) Signal() {
 
 // Options are options to configure a Lock.
 type Options struct {
-	MaxPending     int           // The maximum number of pending acquires
-	MaxOutstanding int           // The maximum number of concurrent acquires
-	TargetLatency  time.Duration // The target latency to wait for an acquire. Acquires that take longer than this can fail.
+	MaxPending         int           // The maximum number of pending acquires
+	InitialOutstanding int           // The initial number of concurrent acquires
+	MaxOutstanding     int           // The maximum number of concurrent acquires
+	TargetLatency      time.Duration // The target latency to wait for an acquire. Acquires that take longer than this can fail.
 }
 
 // Lock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
@@ -63,18 +66,26 @@ type Lock struct {
 	waiters    list.List
 	maxPending int64
 
-	outstanding    int64
-	maxOutstanding int64
+	outstanding           int64
+	outstandingLimit      int64
+	maxOutstandingLimit   int64
+	nextOutstandingAdjust time.Time
 }
 
 func New(opts Options) *Lock {
 	q := Lock{
-		target:         opts.TargetLatency,
-		maxOutstanding: int64(opts.MaxOutstanding),
-		maxPending:     int64(opts.MaxPending),
+		target:              opts.TargetLatency,
+		outstandingLimit:    int64(opts.InitialOutstanding),
+		maxOutstandingLimit: int64(opts.MaxOutstanding),
+		maxPending:          int64(opts.MaxPending),
 	}
 
 	return &q
+}
+
+// Limit atomically returns the current limit of the lock
+func (l *Lock) Limit() int64 {
+	return atomic.LoadInt64(&l.outstandingLimit)
 }
 
 // Acquire a Lock with FIFO ordering, respecting the context. Returns an error it fails to acquire.
@@ -82,7 +93,7 @@ func (l *Lock) Acquire(ctx context.Context) error {
 	l.mu.Lock()
 
 	// Fast path if we are unblocked.
-	if l.outstanding < l.maxOutstanding && l.waiters.Len() == 0 {
+	if l.outstanding < l.outstandingLimit && l.waiters.Len() == 0 {
 		l.outstanding++
 		l.mu.Unlock()
 		return nil
@@ -135,7 +146,40 @@ func (l *Lock) Release() {
 		panic("lock: bad release")
 	}
 
-	l.deque()
+	now := time.Now()
+
+	// If we have enqueued acquires, and can scale outstandingLimit, increase by one
+	if l.outstandingLimit < l.maxOutstandingLimit && l.waiters.Len() > 0 && l.nextOutstandingAdjust.Before(now) {
+		l.outstandingLimit++
+	}
+
+	keepGoing := true
+	for keepGoing && l.outstanding < l.outstandingLimit {
+		keepGoing = l.deque(now)
+	}
+
+	l.mu.Unlock()
+}
+
+// Backoff reduces the amount of concurrent aqcuires
+func (l *Lock) Backoff() {
+	l.mu.Lock()
+
+	now := time.Now()
+
+	if l.nextOutstandingAdjust.Before(now) {
+		// scale down 0.7 times, rounding up, ensuring we scale down
+		before := l.outstandingLimit
+		if before > 1 {
+			l.outstandingLimit = ((l.outstandingLimit * 7) + 9) / 10
+			if l.outstandingLimit >= before {
+				l.outstandingLimit--
+			}
+		}
+
+	}
+
+	l.nextOutstandingAdjust = l.nextOutstandingAdjust.Add(outstandingInterval)
 
 	l.mu.Unlock()
 
@@ -180,21 +224,19 @@ func (l *Lock) externalDrop() {
 }
 
 // Pull instances off the queue until we no longer drop
-func (l *Lock) deque() {
-	now := time.Now()
-
+func (l *Lock) deque(now time.Time) bool {
 	rendezvouz, ok, okToDrop := l.doDeque(now)
 
 	// The queue has no entries, so return
 	if !ok {
-		return
+		return false
 	}
 
 	if !okToDrop {
 		l.dropping = false
 		l.outstanding++
 		rendezvouz.Signal()
-		return
+		return true
 	}
 
 	if l.dropping {
@@ -203,7 +245,7 @@ func (l *Lock) deque() {
 			rendezvouz, ok, okToDrop = l.doDeque(now)
 
 			if !ok {
-				return
+				return false
 			}
 
 			l.droppedCount++
@@ -219,7 +261,7 @@ func (l *Lock) deque() {
 		rendezvouz, ok, _ = l.doDeque(now)
 
 		if !ok {
-			return
+			return false
 		}
 
 		l.dropping = true
@@ -235,4 +277,5 @@ func (l *Lock) deque() {
 
 	l.outstanding++
 	rendezvouz.Signal()
+	return true
 }
