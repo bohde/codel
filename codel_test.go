@@ -93,6 +93,33 @@ func TestLockCanHaveMultiple(t *testing.T) {
 	}
 }
 
+func TestBackoff(t *testing.T) {
+	tests := []struct{ Val, Expected int64 }{
+		{1, 1},
+		{2, 1},
+		{7, 4},
+		{10, 7},
+	}
+
+	for _, tc := range tests {
+		c := New(Options{
+			InitialOutstanding: 1,
+			MaxOutstanding:     int(tc.Val),
+		})
+
+		c.outstanding = tc.Val
+
+		c.Backoff()
+		actual := c.Limit()
+		if actual != tc.Expected {
+			t.Errorf(
+				"Backoff of %d = %d, expected %d",
+				tc.Val, actual, tc.Expected)
+		}
+
+	}
+}
+
 func BenchmarkLockUnblocked(b *testing.B) {
 	c := New(Options{
 		MaxPending:     1,
