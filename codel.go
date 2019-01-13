@@ -155,8 +155,9 @@ func (l *Lock) Release() {
 	now := time.Now()
 
 	// If we have enqueued acquires, and can scale outstandingLimit, increase by one
-	if l.outstandingLimit < l.maxOutstandingLimit && l.waiters.Len() > 0 && l.nextOutstandingAdjust.Before(now) {
+	if l.outstandingLimit < l.maxOutstandingLimit && l.waiters.Len() > 0 && l.nextOutstandingIncrease.Before(now) {
 		l.outstandingLimit++
+		l.nextOutstandingIncrease = now.Add(outstandingInterval)
 	}
 
 	keepGoing := true
@@ -173,12 +174,12 @@ func (l *Lock) Backoff() {
 
 	now := time.Now()
 
-	if l.nextOutstandingAdjust.Before(now) {
+	if l.nextOutstandingDecrease.Before(now) {
 		// scale down 0.7 times, rounding up, ensuring we scale down
 		before := l.outstanding
 
 		if before > 1 {
-			l.outstandingLimit = ((before * 7) + 9) / 10
+			l.outstandingLimit = (before * 7) / 10
 			if l.outstandingLimit >= before {
 				l.outstandingLimit--
 			}
@@ -186,7 +187,9 @@ func (l *Lock) Backoff() {
 
 	}
 
-	l.nextOutstandingAdjust = l.nextOutstandingAdjust.Add(outstandingInterval)
+	l.nextOutstandingDecrease = now.Add(outstandingInterval)
+	// we need at least 1 quiet period before increasing
+	l.nextOutstandingIncrease = now.Add(outstandingInterval * 2)
 
 	l.mu.Unlock()
 
