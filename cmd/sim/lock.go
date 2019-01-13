@@ -15,17 +15,19 @@ type Locker interface {
 }
 
 type Semaphore struct {
-	mu  sync.Mutex
-	cur int64
-	cap int64
-	sem *semaphore.Weighted
+	mu    sync.Mutex
+	cur   int64
+	cap   int64
+	limit int64
+	sem   *semaphore.Weighted
 }
 
 func NewSemaphore(opts codel.Options) *Semaphore {
 	s := semaphore.NewWeighted(int64(opts.MaxOutstanding))
 	return &Semaphore{
-		cap: int64(opts.MaxPending) + int64(opts.MaxOutstanding),
-		sem: s,
+		cap:   int64(opts.MaxPending) + int64(opts.MaxOutstanding),
+		limit: int64(opts.MaxOutstanding),
+		sem:   s,
 	}
 }
 
