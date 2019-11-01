@@ -170,20 +170,20 @@ func (l *PLock) Acquire(ctx context.Context, priority int) error {
 		return nil
 	}
 
-	// If our queue is full, drop
-	if int64(l.waiters.Len()) == l.maxPending {
+	r := prendezvouz{
+		priority:     priority,
+		enqueuedTime: time.Now(),
+		errChan:      make(chan error, 1),
+	}
+
+	pushed := l.waiters.Push(&r)
+
+	if !pushed {
 		l.externalDrop()
 		l.mu.Unlock()
 		return Dropped
 	}
 
-	r := prendezvouz{
-		priority:     priority,
-		enqueuedTime: time.Now(),
-		errChan:      make(chan error),
-	}
-
-	l.waiters.Push(&r)
 	l.mu.Unlock()
 
 	select {
