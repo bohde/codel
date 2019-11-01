@@ -103,6 +103,10 @@ func (pq *priorityQueue) Push(r *prendezvouz) bool {
 		return true
 	}
 
+	if pq.Cap() == 0 {
+		return false
+	}
+
 	// otherwise, we need to check if this takes priority over the lowest element
 	lowestIndex := ((*queue)(pq)).lowestIndex()
 	last := (*pq)[lowestIndex]
@@ -153,7 +157,7 @@ func NewPriority(opts Options) *PLock {
 		target:         opts.TargetLatency,
 		maxOutstanding: int64(opts.MaxOutstanding),
 		maxPending:     int64(opts.MaxPending),
-		waiters:        newQueue(opts.MaxOutstanding),
+		waiters:        newQueue(opts.MaxPending),
 	}
 
 	return &q

@@ -17,6 +17,28 @@ func msToWait(perSec int64) time.Duration {
 	return time.Duration(ms * float64(time.Millisecond))
 }
 
+func TestPriority(t *testing.T) {
+	t.Run("It should drop if zero enqueued", func(t *testing.T) {
+		limiter := NewPriority(Options{
+			MaxPending:     0,
+			MaxOutstanding: 1,
+			TargetLatency:  10 * time.Millisecond,
+		})
+
+		err := limiter.Acquire(context.Background(), 0)
+		if err != nil {
+			t.Errorf("Expected nil err: %s", err)
+			return
+		}
+
+		err = limiter.Acquire(context.Background(), 0)
+		if err == nil {
+			t.Errorf("Expected non-nil err: %s", err)
+		}
+
+	})
+}
+
 // Simulate 3 priorities of 1000 reqs/second each, fighting for a
 // process that can process 15 concurrent at 100 reqs/second. This
 // should be enough capacity for the highest priority, The middle
