@@ -135,7 +135,7 @@ func (pq *priorityQueue) Remove(r *prendezvouz) {
 	heap.Remove((*queue)(pq), r.index)
 }
 
-// PLock implements a FIFO lock with concurrency control, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
+// PLock implements a FIFO lock with concurrency control and priority, based upon the CoDel algorithm (https://queue.acm.org/detail.cfm?id=2209336).
 type PLock struct {
 	mu             sync.Mutex
 	target         time.Duration
