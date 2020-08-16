@@ -37,6 +37,7 @@ func TestPriority(t *testing.T) {
 		}
 
 	})
+
 }
 
 // Simulate 3 priorities of 1000 reqs/second each, fighting for a
@@ -98,4 +99,63 @@ func TestConcurrentSimulation(t *testing.T) {
 
 	wg.Wait()
 
+}
+
+func BenchmarkPLockUnblocked(b *testing.B) {
+	c := NewPriority(Options{
+		MaxPending:     1,
+		MaxOutstanding: 1,
+		TargetLatency:  5 * time.Millisecond,
+	})
+
+	ctx := context.Background()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err := c.Acquire(ctx, i)
+
+		if err != nil {
+			b.Log("Got an error:", err)
+			return
+		}
+		c.Release()
+	}
+	b.StopTimer()
+}
+
+func BenchmarkPLockBlocked(b *testing.B) {
+	const concurrent = 4
+
+	c := NewPriority(Options{
+		MaxPending:     1,
+		MaxOutstanding: concurrent,
+		TargetLatency:  5 * time.Millisecond,
+	})
+
+	ctx := context.Background()
+
+	// Acquire maximum outstanding to avoid fast path
+	for i := 0; i < concurrent; i++ {
+		err := c.Acquire(ctx, i)
+		if err != nil {
+			b.Error("Got an error:", err)
+			return
+		}
+	}
+
+	b.ResetTimer()
+
+	// Race the release and the acquire in order to benchmark slow path
+	for i := 0; i < b.N; i++ {
+		go func() {
+			c.Release()
+
+		}()
+		err := c.Acquire(ctx, i)
+
+		if err != nil {
+			b.Log("Got an error:", err)
+			return
+		}
+	}
 }
