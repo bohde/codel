@@ -115,7 +115,9 @@ func TestPriorityQueue(t *testing.T) {
 					}
 
 					mu.Lock()
-					q.Remove(&r)
+					if r.index >= 0 {
+						q.Remove(&r)
+					}
 					mu.Unlock()
 				}
 
