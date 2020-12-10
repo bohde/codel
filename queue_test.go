@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flyingmutant/rapid"
+	"pgregory.net/rapid"
 )
 
 type queueMachine struct {
