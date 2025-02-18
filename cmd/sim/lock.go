@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/joshbohde/codel"
+	"github.com/bohde/codel"
 	"golang.org/x/sync/semaphore"
 )
 

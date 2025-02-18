@@ -1,4 +1,4 @@
-module github.com/joshbohde/codel
+module github.com/bohde/codel
 
 go 1.15
 

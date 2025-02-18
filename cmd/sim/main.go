@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/joshbohde/codel"
-	"github.com/joshbohde/codel/stats"
+	"github.com/bohde/codel"
+	"github.com/bohde/codel/stats"
 )
 
 func msToWait(perSec int64) time.Duration {

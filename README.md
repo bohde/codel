@@ -1,7 +1,6 @@
 # codel
 
-[![Build Status](https://travis-ci.org/joshbohde/codel.svg?branch=master)](https://travis-ci.org/joshbohde/codel)
-[![GoDoc](https://godoc.org/github.com/joshbohde/codel?status.svg)](https://godoc.org/github.com/joshbohde/codel)
+[![GoDoc](https://pkg.go.dev/github.com/bohde/codel?status.svg)](https://pkg.go.dev/github.com/bohde/codel)
 
 `codel` implements the [Controlled Delay](https://queue.acm.org/detail.cfm?id=2209336) algorithm for overload detection, providing a mechanism to shed load when overloaded. It optimizes for latency while keeping throughput high, even when downstream rates dynamically change.
 
@@ -20,7 +19,7 @@ Source code for the simulations are included in the [sim directory](cmd/sim).
 ## Installation
 
 ```
-$ go get github.com/joshbohde/codel
+$ go get github.com/bohde/codel
 ```
 
 ## Example
@@ -28,7 +27,7 @@ $ go get github.com/joshbohde/codel
 ```
 import (
     "context"
-    "github.com/joshbohde/codel"
+    "github.com/bohde/codel"
 )
 
 func Example() {
